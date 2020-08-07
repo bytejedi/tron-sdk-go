@@ -439,7 +439,7 @@ func (ks *KeyStore) Import(keyJSON []byte, passphrase string) (Account, error) {
 
 // ImportECDSA stores the given key into the key directory, encrypting it with the passphrase.
 func (ks *KeyStore) ImportECDSA(priv *ecdsa.PrivateKey, passphrase string) (Account, error) {
-	key := newKeyFromECDSA(priv)
+	key := NewKeyFromECDSA(priv)
 	if ks.cache.hasAddress(key.Address) {
 		return Account{}, fmt.Errorf("account already exists")
 	}
