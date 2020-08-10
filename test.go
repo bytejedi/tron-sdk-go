@@ -9,6 +9,8 @@ import (
 	"github.com/bytejedi/tron-sdk-go/keystore"
 	"github.com/bytejedi/tron-sdk-go/utils"
 
+	ethcmn "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/miguelmota/go-ethereum-hdwallet"
 	"github.com/tyler-smith/go-bip39"
 	"github.com/tyler-smith/go-bip39/wordlists"
@@ -85,4 +87,15 @@ func main() {
 
 	paddedParamHex := utils.Bytes2Hex(paddedParamBytes)
 	fmt.Println("triggersmartcontract接口parameter入参:", paddedParamHex)
+
+	// sign
+	txId := "966f7f2c4aa31eafcc48a8e21554bd2f7a5b517890ccaec78beea249358b429a"
+
+	txHashBytes := ethcmn.Hex2Bytes(txId)
+	signature, err := crypto.Sign(txHashBytes, privateKeyECDSA)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("tx签名值:", utils.Bytes2Hex(signature))
 }
