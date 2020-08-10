@@ -99,7 +99,7 @@ func main() {
 	}
 	// 确保我们确实在操作所请求的密钥(避免swap attacks)
 	if !bytes.Equal(key.Address, tronAddress) {
-		log.Fatal(fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, tronAddress))
+		log.Fatalf("key content mismatch: have account %x, want %x", key.Address, tronAddress)
 	}
 	// 抹掉runtime内存中的私钥
 	defer keystore.ZeroKey(key.PrivateKey)
