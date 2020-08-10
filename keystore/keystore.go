@@ -210,7 +210,7 @@ func (ks *KeyStore) Delete(a Account, passphrase string) error {
 	// immediately afterwards.
 	a, key, err := ks.GetDecryptedKey(a, passphrase)
 	if key != nil {
-		zeroKey(key.PrivateKey)
+		ZeroKey(key.PrivateKey)
 	}
 	if err != nil {
 		return err
@@ -236,7 +236,7 @@ func (ks *KeyStore) SignTx(a Account, tx *core.Transaction) (*core.Transaction, 
 	if !found {
 		return nil, ErrLocked
 	}
-	defer zeroKey(unlockedKey.PrivateKey)
+	defer ZeroKey(unlockedKey.PrivateKey)
 
 	rawData, err := proto.Marshal(tx.GetRawData())
 	if err != nil {
@@ -278,7 +278,7 @@ func (ks *KeyStore) SignHashWithPassphrase(a Account, passphrase string, hash []
 	if err != nil {
 		return nil, err
 	}
-	defer zeroKey(key.PrivateKey)
+	defer ZeroKey(key.PrivateKey)
 	return crypto.Sign(hash, key.PrivateKey)
 }
 
@@ -287,7 +287,7 @@ func (ks *KeyStore) SignTxWithPassphrase(a Account, passphrase, rawData, txHash 
 	if err != nil {
 		return nil, err
 	}
-	defer zeroKey(key.PrivateKey)
+	defer ZeroKey(key.PrivateKey)
 
 	var txHashBytes []byte
 
@@ -341,7 +341,7 @@ func (ks *KeyStore) TimedUnlock(a Account, passphrase string, timeout time.Durat
 		if u.abort == nil {
 			// The address was unlocked indefinitely, so unlocking
 			// it with a timeout would be confusing.
-			zeroKey(key.PrivateKey)
+			ZeroKey(key.PrivateKey)
 			return nil
 		}
 		// Terminate the expire goroutine and replace it below.
@@ -389,7 +389,7 @@ func (ks *KeyStore) expire(addr Address, u *unlocked, timeout time.Duration) {
 		// because the map stores a new pointer every time the key is
 		// unlocked.
 		if ks.unlocked[addr.String()] == u {
-			zeroKey(u.PrivateKey)
+			ZeroKey(u.PrivateKey)
 			delete(ks.unlocked, addr.String())
 		}
 		ks.mu.Unlock()
@@ -429,7 +429,7 @@ func (ks *KeyStore) Export(a Account, passphrase, newPassphrase string) (keyJSON
 func (ks *KeyStore) Import(keyJSON []byte, passphrase string) (Account, error) {
 	key, err := DecryptKey(keyJSON, passphrase)
 	if key != nil && key.PrivateKey != nil {
-		defer zeroKey(key.PrivateKey)
+		defer ZeroKey(key.PrivateKey)
 	}
 	if err != nil {
 		return Account{}, err
@@ -465,8 +465,8 @@ func (ks *KeyStore) Update(a Account, passphrase, newPassphrase string) error {
 	return ks.storage.StoreKey(a.URL.Path, key, newPassphrase)
 }
 
-// zeroKey zeroes a private key in memory.
-func zeroKey(k *ecdsa.PrivateKey) {
+// ZeroKey zeroes a private key in memory.
+func ZeroKey(k *ecdsa.PrivateKey) {
 	b := k.D.Bits()
 	for i := range b {
 		b[i] = 0

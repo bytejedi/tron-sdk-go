@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -90,12 +91,28 @@ func main() {
 
 	// sign
 	txId := "966f7f2c4aa31eafcc48a8e21554bd2f7a5b517890ccaec78beea249358b429a"
-
 	txHashBytes := ethcmn.Hex2Bytes(txId)
-	signature, err := crypto.Sign(txHashBytes, privateKeyECDSA)
+
+	key, err := keystore.DecryptKey(keyjson, keystorePassword)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// 确保我们确实在操作所请求的密钥(避免swap attacks)
+	if !bytes.Equal(key.Address, tronAddress) {
+		log.Fatal(fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, tronAddress))
+	}
+	// 抹掉runtime内存中的私钥
+	defer keystore.ZeroKey(key.PrivateKey)
+	signature, err := crypto.Sign(txHashBytes, key.PrivateKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("tx签名值:", utils.Bytes2Hex(signature))
+	fmt.Println("使用keystore签名tx的签名值:", utils.Bytes2Hex(signature))
+
+	signature2, err := crypto.Sign(txHashBytes, privateKeyECDSA)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("使用私钥签名tx的签名值:", utils.Bytes2Hex(signature2))
 }

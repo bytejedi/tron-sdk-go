@@ -162,7 +162,7 @@ func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, Account, error
 		URL:     URL{Scheme: KeyStoreScheme, Path: ks.JoinPath(keyFileName(key.Address))},
 	}
 	if err := ks.StoreKey(a.URL.Path, key, auth); err != nil {
-		zeroKey(key.PrivateKey)
+		ZeroKey(key.PrivateKey)
 		return nil, a, err
 	}
 	return key, a, err
