@@ -97,10 +97,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// 确保我们确实在操作所请求的密钥(避免swap attacks)
-	if !bytes.Equal(key.Address, tronAddress) {
-		log.Fatalf("key content mismatch: have account %x, want %x", key.Address, tronAddress)
-	}
 	// 抹掉runtime内存中的私钥
 	defer keystore.ZeroKey(key.PrivateKey)
 	signature, err := crypto.Sign(txHashBytes, key.PrivateKey)
