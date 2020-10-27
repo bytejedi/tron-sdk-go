@@ -6,18 +6,20 @@ import (
 	"math/big"
 	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/bytejedi/tron-sdk-go/keystore"
-	eABI "github.com/ethereum/go-ethereum/accounts/abi"
-	eCommon "github.com/ethereum/go-ethereum/common"
+
+	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
+	ethcmn "github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
 )
 
 // Param list
 type Param map[string]interface{}
 
-// LoadFromJSON string into ABI data
-func LoadFromJSON(jString string) ([]Param, error) {
+// loadFromJSON string into ABI data
+func loadFromJSON(jString string) ([]Param, error) {
 	if len(jString) == 0 {
 		return nil, nil
 	}
@@ -38,20 +40,20 @@ func Signature(method string) []byte {
 	return b[:4]
 }
 
-func convetToAddress(v interface{}) (eCommon.Address, error) {
+func convetToAddress(v interface{}) (ethcmn.Address, error) {
 	switch v.(type) {
 	case string:
 		addr, err := keystore.Base58ToAddress(v.(string))
 		if err != nil {
-			return eCommon.Address{}, fmt.Errorf("invalid address %s: %+v", v.(string), err)
+			return ethcmn.Address{}, fmt.Errorf("invalid address %s: %+v", v.(string), err)
 		}
-		return eCommon.BytesToAddress(addr.Bytes()[len(addr.Bytes())-20:]), nil
+		return ethcmn.BytesToAddress(addr.Bytes()[len(addr.Bytes())-20:]), nil
 	}
-	return eCommon.Address{}, fmt.Errorf("invalid address %v", v)
+	return ethcmn.Address{}, fmt.Errorf("invalid address %v", v)
 }
 
-func convertToInt(ty eABI.Type, v interface{}) interface{} {
-	if ty.T == eABI.IntTy && ty.Size <= 64 {
+func convertToInt(ty ethabi.Type, v interface{}) interface{} {
+	if ty.T == ethabi.IntTy && ty.Size <= 64 {
 		tmp, _ := strconv.ParseInt(v.(string), 10, ty.Size)
 		switch ty.Size {
 		case 8:
@@ -63,7 +65,7 @@ func convertToInt(ty eABI.Type, v interface{}) interface{} {
 		case 64:
 			v = int64(tmp)
 		}
-	} else if ty.T == eABI.UintTy && ty.Size <= 64 {
+	} else if ty.T == ethabi.UintTy && ty.Size <= 64 {
 		tmp, _ := strconv.ParseUint(v.(string), 10, ty.Size)
 		switch ty.Size {
 		case 8:
@@ -81,75 +83,130 @@ func convertToInt(ty eABI.Type, v interface{}) interface{} {
 	return v
 }
 
-// GetPaddedParam from struct
-func GetPaddedParam(param []Param) ([]byte, error) {
+// GetPaddedParam return padded params bytes
+func GetPaddedParam(method *ethabi.Method, param []Param) ([]byte, error) {
 	values := make([]interface{}, 0)
-	arguments := eABI.Arguments{}
 
 	for _, p := range param {
 		if len(p) != 1 {
 			return nil, fmt.Errorf("invalid param %+v", p)
 		}
 		for k, v := range p {
-			ty, err := eABI.NewType(k, "", nil)
+			if k == "uint" {
+				k = "uint256"
+			} else if strings.HasPrefix(k, "uint[") {
+				k = strings.Replace(k, "uint[", "uint256[", 1)
+			}
+			ty, err := ethabi.NewType(k, "", nil)
 			if err != nil {
 				return nil, fmt.Errorf("invalid param %+v: %+v", p, err)
 			}
-			arguments = append(arguments,
-				eABI.Argument{
-					Name:    "",
-					Type:    ty,
-					Indexed: false,
-				},
-			)
 
-			if ty.T == eABI.SliceTy || ty.T == eABI.ArrayTy {
-				if ty.Elem.T == eABI.AddressTy {
-					tmp := v.([]string)
-					v = make([]eCommon.Address, 0)
+			if ty.T == ethabi.SliceTy || ty.T == ethabi.ArrayTy {
+				if ty.Elem.T == ethabi.AddressTy {
+					tmp := v.([]interface{})
+					v = make([]ethcmn.Address, 0)
 					for i := range tmp {
 						addr, err := convetToAddress(tmp[i])
 						if err != nil {
 							return nil, err
 						}
-						v = append(v.([]eCommon.Address), addr)
+						v = append(v.([]ethcmn.Address), addr)
 					}
 				}
 
-				if (ty.Elem.T == eABI.IntTy || ty.Elem.T == eABI.UintTy) &&
-					ty.Elem.Size > 64 &&
-					reflect.TypeOf(v).Elem().Kind() == reflect.String {
-					tmp := make([]*big.Int, 0)
-					for _, s := range v.([]string) {
-						value, _ := new(big.Int).SetString(s, 10)
-						tmp = append(tmp, value)
+				if (ty.Elem.T == ethabi.IntTy || ty.Elem.T == ethabi.UintTy) && reflect.TypeOf(v).Elem().Kind() == reflect.Interface {
+					if ty.Elem.Size > 64 {
+						tmp := make([]*big.Int, 0)
+						for _, i := range v.([]interface{}) {
+							if s, ok := i.(string); ok {
+								value, _ := new(big.Int).SetString(s, 10)
+								tmp = append(tmp, value)
+							} else {
+								return nil, fmt.Errorf("abi: cannot use %T as type string as argument", i)
+							}
+						}
+						v = tmp
+					} else {
+						tmpI := make([]interface{}, 0)
+						for _, i := range v.([]interface{}) {
+							if s, ok := i.(string); ok {
+								value, err := strconv.ParseUint(s, 10, ty.Elem.Size)
+								if err != nil {
+									return nil, err
+								}
+								tmpI = append(tmpI, value)
+							} else {
+								return nil, fmt.Errorf("abi: cannot use %T as type string as argument", i)
+							}
+						}
+						switch ty.Elem.Size {
+						case 8:
+							tmp := make([]uint8, len(tmpI))
+							for i, sv := range tmpI {
+								tmp[i] = uint8(sv.(uint64))
+							}
+							v = tmp
+						case 16:
+							tmp := make([]uint16, len(tmpI))
+							for i, sv := range tmpI {
+								tmp[i] = uint16(sv.(uint64))
+							}
+							v = tmp
+						case 32:
+							tmp := make([]uint32, len(tmpI))
+							for i, sv := range tmpI {
+								tmp[i] = uint32(sv.(uint64))
+							}
+							v = tmp
+						case 64:
+							tmp := make([]uint64, len(tmpI))
+							for i, sv := range tmpI {
+								tmp[i] = sv.(uint64)
+							}
+							v = tmp
+						}
 					}
-					v = tmp
 				}
 			}
-			if ty.T == eABI.AddressTy {
+
+			if ty.T == ethabi.AddressTy {
 				if v, err = convetToAddress(v); err != nil {
 					return nil, err
 				}
 			}
-			if (ty.T == eABI.IntTy || ty.T == eABI.UintTy) && reflect.TypeOf(v).Kind() == reflect.String {
+
+			if (ty.T == ethabi.IntTy || ty.T == ethabi.UintTy) && reflect.TypeOf(v).Kind() == reflect.String {
 				v = convertToInt(ty, v)
 			}
 
 			values = append(values, v)
 		}
 	}
+
 	// convert params to bytes
-	return arguments.PackValues(values)
+	return method.Inputs.PackValues(values)
 }
 
 // Pack data into bytes
-func Pack(method string, param []Param) ([]byte, error) {
-	signature := Signature(method)
-	pBytes, err := GetPaddedParam(param)
+func Pack(method *ethabi.Method, paramsJson string) ([]byte, error) {
+	params, err := loadFromJSON(paramsJson)
 	if err != nil {
 		return nil, err
 	}
-	signature = append(signature, pBytes...)
-	return signature, nil
+
+	pBytes, err := GetPaddedParam(method, params)
+	if err != nil {
+		return nil, err
+	}
+	return append(method.ID, pBytes...), nil
+}
+
+// DecodeOutputs unpack outputs data
+func DecodeOutputs(method *ethabi.Method, outputs []byte) (interface{}, error) {
+	res, err := method.Outputs.UnpackValues(outputs)
+	if err != nil {
+		return string(outputs), nil
+	}
+	return res, nil
 }
