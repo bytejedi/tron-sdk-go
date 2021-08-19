@@ -2,9 +2,9 @@ package keystore
 
 import (
 	"crypto/ecdsa"
-	"github.com/bytejedi/tron-sdk-go/utils"
 	"math/big"
 
+	"github.com/bytejedi/tron-sdk-go/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 

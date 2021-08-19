@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/bytejedi/tron-sdk-go/keystore"
-
 	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	"golang.org/x/crypto/sha3"
@@ -23,7 +22,7 @@ func loadFromJSON(jString string) ([]Param, error) {
 	if len(jString) == 0 {
 		return nil, nil
 	}
-	data := []Param{}
+	var data []Param
 	err := json.Unmarshal([]byte(jString), &data)
 	if err != nil {
 		return nil, err
@@ -63,7 +62,7 @@ func convertToInt(ty ethabi.Type, v interface{}) interface{} {
 		case 32:
 			v = int32(tmp)
 		case 64:
-			v = int64(tmp)
+			v = tmp
 		}
 	} else if ty.T == ethabi.UintTy && ty.Size <= 64 {
 		tmp, _ := strconv.ParseUint(v.(string), 10, ty.Size)
@@ -75,7 +74,7 @@ func convertToInt(ty ethabi.Type, v interface{}) interface{} {
 		case 32:
 			v = uint32(tmp)
 		case 64:
-			v = uint64(tmp)
+			v = tmp
 		}
 	} else {
 		v, _ = new(big.Int).SetString(v.(string), 10)
@@ -83,8 +82,8 @@ func convertToInt(ty ethabi.Type, v interface{}) interface{} {
 	return v
 }
 
-// GetPaddedParam return padded params bytes
-func GetPaddedParam(method *ethabi.Method, param []Param) ([]byte, error) {
+// getPaddedParam return padded params bytes
+func getPaddedParam(method *ethabi.Method, param []Param) ([]byte, error) {
 	values := make([]interface{}, 0)
 
 	for _, p := range param {
@@ -195,11 +194,11 @@ func Pack(method *ethabi.Method, paramsJson string) ([]byte, error) {
 		return nil, err
 	}
 
-	pBytes, err := GetPaddedParam(method, params)
+	bz, err := getPaddedParam(method, params)
 	if err != nil {
 		return nil, err
 	}
-	return append(method.ID, pBytes...), nil
+	return append(method.ID, bz...), nil
 }
 
 // DecodeOutputs unpack outputs data

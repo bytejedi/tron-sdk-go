@@ -1,14 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"log"
 
 	"github.com/bytejedi/tron-sdk-go/abi"
 	"github.com/bytejedi/tron-sdk-go/keystore"
 	"github.com/bytejedi/tron-sdk-go/utils"
-
+	ethabi "github.com/ethereum/go-ethereum/accounts/abi"
 	ethcmn "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/miguelmota/go-ethereum-hdwallet"
@@ -20,7 +22,7 @@ func main() {
 	keystorePassword := "password"
 
 	// Set wordlist
-	bip39.SetWordList(wordlists.ChineseSimplified)
+	bip39.SetWordList(wordlists.English)
 	entropy, err := bip39.NewEntropy(256)
 	if err != nil {
 		log.Fatal(err)
@@ -67,26 +69,32 @@ func main() {
 
 	tronAddress := keystore.PubkeyToAddress(*publicKeyECDSA)
 
-	fmt.Println("助记词:", mnemonic)
-	fmt.Println("base58地址:", tronAddress.String())
-	fmt.Println("hex地址:", hex.EncodeToString(tronAddress))
-	fmt.Println("私钥:", privKeyHex)
-	fmt.Println("公钥:", pubKeyHex)
+	fmt.Println("mnemonic:", mnemonic)
+	fmt.Println("base58 address:", tronAddress.String())
+	fmt.Println("hex address:", hex.EncodeToString(tronAddress))
+	fmt.Println("private key:", privKeyHex)
+	fmt.Println("public key:", pubKeyHex)
 	fmt.Println("keystore:", string(keyjson))
 
-	paramStr := "[{\"address\":\"TRu2DruRJDjVsqno7CwXMzJb7vQTpVaKmL\"},{\"address\":\"TRu2DruRJDjVsqno7CwXMzJb7vQTpVaKmL\"},{\"uint256\":\"10000\"},{\"uint256\":\"0\"}]"
-	param, err := abi.LoadFromJSON(paramStr)
+	abiJson, err := ioutil.ReadFile("./abi.json")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	paddedParamBytes, err := abi.GetPaddedParam(param)
+	a, err := ethabi.JSON(bytes.NewReader(abiJson))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	method := a.Methods["prepareMint"]
+	paramJson := "[{\"uint256\":\"1212\"},{\"uint256[4]\":[\"2\",\"3\",\"4\",\"5\"]},{\"uint256[2]\":[\"39\",\"10\"]},{\"address\":\"TCQRkmYMbb8bzrZfrtcokox8hwVmY3DCVP\"},{\"address[4]\":[\"TCudRMFJDPChH2FNjVb82cvbREMPNUm1pj\",\"TCudRMFJDPChH2FNjVb82cvbREMPNUm1pj\",\"TCudRMFJDPChH2FNjVb82cvbREMPNUm1pj\",\"TCudRMFJDPChH2FNjVb82cvbREMPNUm1pj\"]},{\"uint256\":\"4\"}]"
+	paddedParamBytes, err := abi.Pack(&method, paramJson)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	paddedParamHex := utils.Bytes2Hex(paddedParamBytes)
-	fmt.Println("triggersmartcontract接口parameter入参:", paddedParamHex)
+	fmt.Println("triggersmartcontract.parameter:", paddedParamHex)
 
 	// sign
 	txId := "966f7f2c4aa31eafcc48a8e21554bd2f7a5b517890ccaec78beea249358b429a"
@@ -96,18 +104,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// 抹掉runtime内存中的私钥
 	defer keystore.ZeroKey(key.PrivateKey)
 	signature, err := crypto.Sign(txHashBytes, key.PrivateKey)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("使用keystore签名tx的签名值:", utils.Bytes2Hex(signature))
+	fmt.Println("sig from keystore:", utils.Bytes2Hex(signature))
 
 	signature2, err := crypto.Sign(txHashBytes, privateKeyECDSA)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("使用私钥签名tx的签名值:", utils.Bytes2Hex(signature2))
+	fmt.Println("sig from private key:", utils.Bytes2Hex(signature2))
 }
